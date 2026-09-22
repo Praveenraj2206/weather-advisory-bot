@@ -1,0 +1,134 @@
+[
+  {
+    "id": "SOP-01",
+    "activity": "cycling",
+    "description": "High wind conditions may make cycling unsafe.",
+    "conditions": [
+      { "field": "wind_speed", "operator": ">", "value": 40 }
+    ],
+    "severity": "high",
+    "advice": "Avoid cycling because wind speeds are high. Consider postponing your ride until conditions improve."
+  },
+  {
+    "id": "SOP-02",
+    "activity": "cycling",
+    "description": "High precipitation probability may make cycling unsafe.",
+    "conditions": [
+      { "field": "precipitation_probability", "operator": ">", "value": 70 }
+    ],
+    "severity": "high",
+    "advice": "There is a high chance of precipitation. Consider postponing cycling or choosing a safer indoor activity."
+  },
+  {
+    "id": "SOP-03",
+    "activity": "cycling",
+    "description": "Very low temperatures may create uncomfortable cycling conditions.",
+    "conditions": [
+      { "field": "temperature", "operator": "<", "value": 5 }
+    ],
+    "severity": "moderate",
+    "advice": "It is cold outside. Dress warmly and consider postponing your ride if conditions feel unsafe."
+  },
+  {
+    "id": "SOP-04",
+    "activity": "walking",
+    "description": "Strong winds may make walking outdoors difficult.",
+    "conditions": [
+      { "field": "wind_speed", "operator": ">", "value": 60 }
+    ],
+    "severity": "high",
+    "advice": "Strong winds are expected. Avoid unnecessary outdoor walking and seek shelter if conditions worsen."
+  },
+  {
+    "id": "SOP-05",
+    "activity": "picnic",
+    "description": "Picnic conditions are favorable when temperatures are mild, precipitation chances are low, and winds are light.",
+    "conditions": {
+      "all": [
+        { "field": "temperature", "operator": "between", "value": [15, 28] },
+        { "field": "precipitation_probability", "operator": "<", "value": 20 },
+        { "field": "wind_speed", "operator": "<", "value": 20 }
+      ]
+    },
+    "severity": "low",
+    "advice": "The weather looks suitable for a picnic. Take normal precautions, bring water, and check the forecast before leaving."
+  },
+  {
+    "id": "SOP-06",
+    "activity": "children",
+    "description": "High UV levels require extra sun protection for children outdoors.",
+    "conditions": [
+      { "field": "uv_index", "operator": ">", "value": 8 }
+    ],
+    "severity": "high",
+    "advice": "UV levels are very high. Limit direct sun exposure, seek shade, and use suitable sun protection for children."
+  },
+  {
+    "id": "SOP-07",
+    "activity": "children",
+    "description": "Very high temperatures may pose a heat-related risk to children outdoors.",
+    "conditions": [
+      { "field": "temperature", "operator": ">", "value": 40 }
+    ],
+    "severity": "high",
+    "advice": "It is extremely hot. Avoid strenuous outdoor activities with children, stay in a cool place, and drink water regularly."
+  },
+  {
+    "id": "SOP-08",
+    "activity": "travel",
+    "description": "A high chance of precipitation may affect travel plans.",
+    "conditions": [
+      { "field": "precipitation_probability", "operator": ">", "value": 80 }
+    ],
+    "severity": "moderate",
+    "advice": "Rain is likely. Allow extra travel time, check local conditions, and consider delaying non-essential travel."
+  },
+  {
+    "id": "SOP-09",
+    "activity": "elderly",
+    "description": "Freezing temperatures may create risks for elderly people outdoors.",
+    "conditions": [
+      { "field": "temperature", "operator": "<", "value": 0 }
+    ],
+    "severity": "high",
+    "advice": "Temperatures are below freezing. Elderly people should consider limiting outdoor exposure and dressing warmly if going outside."
+  },
+  {
+    "id": "SOP-10",
+    "activity": "hiking",
+    "description": "Strong winds or a high chance of precipitation may make hiking hazardous.",
+    "conditions": {
+      "any": [
+        { "field": "wind_speed", "operator": ">", "value": 35 },
+        { "field": "precipitation_probability", "operator": ">", "value": 50 }
+      ]
+    },
+    "severity": "high",
+    "advice": "Conditions may be unsuitable for hiking. Consider postponing your hike and check local trail and weather alerts."
+  },
+  {
+    "id": "SOP-11",
+    "activity": "outdoor",
+    "description": "Severe weather thresholds indicate potentially hazardous outdoor conditions.",
+    "conditions": {
+      "any": [
+        { "field": "temperature", "operator": ">", "value": 45 },
+        { "field": "temperature", "operator": "<", "value": -10 },
+        { "field": "wind_speed", "operator": ">", "value": 80 },
+        { "field": "precipitation_probability", "operator": ">", "value": 95 }
+      ]
+    },
+    "severity": "high",
+    "advice": "Weather conditions may be hazardous. Avoid unnecessary outdoor activities and follow official local weather warnings."
+  },
+  {
+    "id": "SOP-12",
+    "activity": "outdoor",
+    "description": "Moderate temperatures may be suitable for general outdoor activities.",
+    "conditions": [
+      { "field": "temperature", "operator": "between", "value": [18, 25] }
+    ],
+    "severity": "low",
+    "advice": "The temperature is generally comfortable for outdoor activities. Stay hydrated and keep an eye on changing weather conditions."
+  }
+]

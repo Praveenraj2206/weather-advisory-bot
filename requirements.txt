@@ -1,0 +1,8 @@
+langgraph
+langchain
+langchain-groq
+fastapi
+uvicorn
+requests
+python-dotenv
+pydantic
