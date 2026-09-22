@@ -1,134 +1,221 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Optional
 
 
+# Load SOPs from the same directory as this Python file
 SOPS_FILE = Path(__file__).with_name("sops.json")
 
 
-def load_sops() -> list[dict[str, Any]]:
-    """Load SOP rules from the JSON file."""
-    try:
-        with SOPS_FILE.open("r", encoding="utf-8") as file:
-            sops = json.load(file)
+def load_sops() -> list[dict]:
+    """Load SOPs from sops.json."""
+    with SOPS_FILE.open("r", encoding="utf-8") as file:
+        sops = json.load(file)
 
-        if not isinstance(sops, list):
-            raise ValueError("sops.json must contain a JSON list.")
+    if not isinstance(sops, list):
+        raise ValueError("sops.json must contain a list of SOPs.")
 
-        return sops
-
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(
-            f"Could not find SOP file: {SOPS_FILE}"
-        ) from exc
+    return sops
 
 
-def evaluate_condition(
-    condition: dict[str, Any],
-    weather: dict[str, Any]
-) -> bool:
-    """Check whether one weather condition matches."""
+def matches_simple_condition(condition: dict, weather: dict) -> bool:
+    """Check whether a weather value satisfies a simple condition."""
+
     field = condition.get("field")
     operator = condition.get("operator")
-    expected = condition.get("value")
+    value = condition.get("value")
 
-    if field not in weather or weather[field] is None:
+    actual = weather.get(field)
+
+    if actual is None:
         return False
-
-    actual = weather[field]
 
     try:
         if operator == ">":
-            return actual > expected
+            return actual > value
 
         elif operator == "<":
-            return actual < expected
+            return actual < value
 
         elif operator == ">=":
-            return actual >= expected
+            return actual >= value
 
         elif operator == "<=":
-            return actual <= expected
+            return actual <= value
 
         elif operator == "==":
-            return actual == expected
+            return actual == value
 
         elif operator == "between":
-            lower, upper = expected
-            return lower <= actual <= upper
+            minimum = condition.get("min")
+            maximum = condition.get("max")
 
-    except (TypeError, ValueError, IndexError):
+            if minimum is None or maximum is None:
+                return False
+
+            return minimum <= actual <= maximum
+
+    except (TypeError, ValueError):
         return False
 
     return False
 
 
-def evaluate_conditions(
-    conditions: Any,
-    weather: dict[str, Any]
-) -> bool:
-    """Evaluate individual conditions or all/any groups."""
+def matches_fuzzy_condition(condition: dict, weather: dict) -> bool:
+    """Evaluate multiple conditions using all or any logic."""
 
-    if isinstance(conditions, list):
-        return all(
-            evaluate_condition(condition, weather)
-            for condition in conditions
+    conditions = condition.get("conditions", [])
+    logic = condition.get("logic", "all")
+
+    if not conditions:
+        return False
+
+    results = [
+        matches_simple_condition(cond, weather)
+        for cond in conditions
+    ]
+
+    if logic == "all":
+        return all(results)
+
+    elif logic == "any":
+        return any(results)
+
+    return False
+
+
+def matches_severe_weather_condition(
+    condition: dict,
+    weather: dict
+) -> bool:
+    """Evaluate severe-weather thresholds defined in the SOP JSON."""
+
+    thresholds = condition.get("thresholds", {})
+
+    temperature = weather.get("temperature_2m")
+    wind = weather.get("wind_speed_10m")
+    rain_probability = weather.get("precipitation_probability")
+
+    # Individual severe-weather conditions
+    extreme_heat = (
+        temperature is not None
+        and temperature >= thresholds.get("extreme_heat", float("inf"))
+    )
+
+    extreme_cold = (
+        temperature is not None
+        and temperature <= thresholds.get("extreme_cold", float("-inf"))
+    )
+
+    severe_wind = (
+        wind is not None
+        and wind >= thresholds.get("severe_wind", float("inf"))
+    )
+
+    certain_rain = (
+        rain_probability is not None
+        and rain_probability >= thresholds.get("certain_rain", float("inf"))
+    )
+
+    # Combination thresholds are also configurable in sops.json.
+    combination = condition.get("combination", {})
+
+    rain_threshold = combination.get("rain_probability", float("inf"))
+    wind_threshold = combination.get("wind_speed", float("inf"))
+
+    high_rain_and_wind = (
+        rain_probability is not None
+        and wind is not None
+        and rain_probability >= rain_threshold
+        and wind >= wind_threshold
+    )
+
+    check_type = condition.get("check_type", "any")
+
+    if check_type == "any":
+        return (
+            extreme_heat
+            or extreme_cold
+            or severe_wind
+            or certain_rain
         )
 
-    if isinstance(conditions, dict):
+    elif check_type == "combination":
+        return (
+            high_rain_and_wind
+            or extreme_heat
+            or extreme_cold
+        )
 
-        if "all" in conditions:
-            return all(
-                evaluate_condition(condition, weather)
-                for condition in conditions["all"]
-            )
+    return False
 
-        if "any" in conditions:
-            return any(
-                evaluate_condition(condition, weather)
-                for condition in conditions["any"]
-            )
 
-        if "field" in conditions:
-            return evaluate_condition(conditions, weather)
+def matches_condition(condition: dict, weather: dict) -> bool:
+    """Choose the correct evaluator based on the condition type."""
+
+    condition_type = condition.get("type")
+
+    if condition_type == "simple":
+        return matches_simple_condition(condition, weather)
+
+    elif condition_type == "fuzzy":
+        return matches_fuzzy_condition(condition, weather)
+
+    elif condition_type == "severe_weather":
+        return matches_severe_weather_condition(condition, weather)
 
     return False
 
 
 def find_matching_sop(
-    activity: str,
-    weather: dict[str, Any]
-) -> dict[str, Any] | None:
+    activity_type: str,
+    weather: dict,
+    location: str = ""
+) -> Optional[dict]:
     """
-    Find the first matching SOP.
+    Find the matching SOP.
 
-    Activity-specific SOPs are checked first.
-    General outdoor SOPs are checked afterward.
+    Resolution strategy:
+    1. Check SOPs for the requested activity.
+    2. Also check general outdoor SOPs.
+    3. Select the matching SOP with the highest severity.
+    4. For equal severity, retain the first matching SOP in sops.json.
     """
 
     sops = load_sops()
-    normalized_activity = activity.strip().lower()
 
-    # First, check rules for the requested activity.
-    activity_sops = [
-        sop for sop in sops
-        if sop.get("activity", "").strip().lower()
-        == normalized_activity
-    ]
+    requested_activity = activity_type.strip().lower()
 
-    # Then, check general outdoor rules as a fallback.
-    general_sops = []
+    matching_sops = []
 
-    if normalized_activity != "outdoor":
-        general_sops = [
-            sop for sop in sops
-            if sop.get("activity", "").strip().lower() == "outdoor"
-        ]
+    for sop in sops:
+        sop_activity = sop.get("activity_type", "").strip().lower()
 
-    # Return the first rule whose conditions match.
-    for sop in activity_sops + general_sops:
-        if evaluate_conditions(sop.get("conditions"), weather):
-            return sop
+        # Check the requested activity and general outdoor policies.
+        if sop_activity not in (requested_activity, "outdoor"):
+            continue
 
-    # No matching policy was found.
-    return None
+        condition = sop.get("condition", {})
+
+        if matches_condition(condition, weather):
+            matching_sops.append(sop)
+
+    if not matching_sops:
+        return None
+
+    # Severity priority: high > moderate > low
+    severity_order = {
+        "high": 3,
+        "moderate": 2,
+        "low": 1
+    }
+
+    matching_sops.sort(
+        key=lambda sop: severity_order.get(
+            sop.get("severity", "").lower(),
+            0
+        ),
+        reverse=True
+    )
+
+    return matching_sops[0]

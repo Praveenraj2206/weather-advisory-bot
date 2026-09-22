@@ -122,13 +122,19 @@
     "advice": "Weather conditions may be hazardous. Avoid unnecessary outdoor activities and follow official local weather warnings."
   },
   {
-    "id": "SOP-12",
-    "activity": "outdoor",
-    "description": "Moderate temperatures may be suitable for general outdoor activities.",
-    "conditions": [
-      { "field": "temperature", "operator": "between", "value": [18, 25] }
-    ],
-    "severity": "low",
-    "advice": "The temperature is generally comfortable for outdoor activities. Stay hydrated and keep an eye on changing weather conditions."
-  }
+  "id": "SOP-12",
+  "activity": "outdoor",
+  "description": "Moderate temperatures may be suitable for general outdoor activities.",
+  "conditions": {
+    "all": [
+      {
+        "field": "temperature",
+        "operator": "between",
+        "value": [18, 25]
+      }
+    ]
+  },
+  "severity": "low",
+  "advice": "The temperature is generally comfortable for outdoor activities. Stay hydrated and keep an eye on changing weather conditions."
+}
 ]
