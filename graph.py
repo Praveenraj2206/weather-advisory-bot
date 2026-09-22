@@ -34,7 +34,7 @@ def get_llm() -> ChatGroq:
             "GROQ_API_KEY is missing. Add your Groq API key to the .env file."
         )
 
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
     return ChatGroq(
         api_key=api_key,
