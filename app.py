@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from fastapi.responses import HTMLResponse
-from graph import run_advisor
+from pydantic import BaseModel, Field
 
+from graph import run_advisor
 
 app = FastAPI(
     title="Weather Advisory Support Bot",
@@ -22,131 +22,105 @@ class AdvisoryRequest(BaseModel):
         description="A weather-related question that includes an activity and location.",
         examples=["Is it safe to go cycling in Bengaluru today?"],
     )
+    session_id: str = Field(
+        "default",
+        max_length=100,
+        description="Chat session id. Memory is kept per session and resets on server restart.",
+    )
 
 
 class AdvisoryResponse(BaseModel):
     question: str
     location: str | None = None
     activity: str | None = None
+    when: str | None = None
     weather: dict | None = None
     sop: dict | None = None
+    also_applicable: list[dict] = []
     error: str | None = None
     response: str
 
 
+PAGE = r"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weather Advisory Bot</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:640px;margin:20px auto;padding:0 12px}
+  #chat{border:1px solid #ccc;border-radius:8px;height:60vh;overflow-y:auto;padding:10px;margin-bottom:10px}
+  .m{margin:8px 0;padding:8px 10px;border-radius:8px;white-space:pre-wrap}
+  .u{background:#dbeafe;margin-left:15%}
+  .b{background:#f1f5f9;margin-right:15%}
+  .meta{font-size:12px;color:#555;margin-top:4px}
+  form{display:flex;gap:6px}
+  input{flex:1;padding:10px}
+  button{padding:10px 16px}
+</style>
+</head>
+<body>
+<h2>Weather Advisory Bot</h2>
+<div id="chat"></div>
+<form id="f">
+  <input id="q" placeholder="e.g. Is it safe to cycle in Bhopal today?" autocomplete="off" required>
+  <button id="b">Send</button>
+</form>
+<script>
+const sid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+const chat = document.getElementById("chat"), q = document.getElementById("q"), b = document.getElementById("b");
+
+function add(cls, text, meta) {
+  const d = document.createElement("div");
+  d.className = "m " + cls;
+  d.textContent = text;
+  if (meta) {
+    const s = document.createElement("div");
+    s.className = "meta";
+    s.textContent = meta;
+    d.appendChild(s);
+  }
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = q.value.trim();
+  if (!text) return;
+  q.value = "";
+  add("u", text);
+  b.disabled = true;
+  const wait = add("b", "Checking...");
+  try {
+    const r = await fetch("/advice", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question: text, session_id: sid})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Request failed");
+    wait.remove();
+    add("b", d.response, d.sop ? ("Policy: " + d.sop.id + " | severity: " + d.sop.severity + " | activity: " + d.activity) : ("Policy: none applies | activity: " + d.activity));
+  } catch (err) {
+    wait.remove();
+    add("b", "Error: " + err.message);
+  } finally {
+    b.disabled = false;
+    q.focus();
+  }
+};
+</script>
+</body>
+</html>
+"""
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    return """
-    <html>
-    <head>
-        <title>Weather Advisory Bot</title>
-    </head>
+    return PAGE
 
-    <body style="font-family: Arial; background-color: #eef4ff;">
-
-        <div style="width: 500px; margin: 50px auto; padding: 25px;
-                    background-color: white; border-radius: 10px;
-                    box-shadow: 0 0 10px lightgray;">
-
-            <h1 style="text-align: center; color: #2563eb;">
-                Weather Advisory Bot
-            </h1>
-
-            <p style="text-align: center;">
-                Ask a question about the weather and get useful advice.
-            </p>
-
-            <form id="myForm">
-                <label>Enter your question:</label>
-                <br><br>
-
-                <textarea id="question" rows="4"
-                    style="width: 100%; box-sizing: border-box; padding: 10px;"
-                    placeholder="Example: Would today be a good day for a picnic in Bengaluru?"
-                    required></textarea>
-
-                <br><br>
-
-                <button type="submit"
-                    style="width: 100%; padding: 12px; background-color: #2563eb;
-                           color: white; border: none; border-radius: 5px;">
-                    Get Weather Advice
-                </button>
-            </form>
-
-            <div id="result"
-                style="display: none; margin-top: 25px; padding: 15px;
-                       background-color: #f1f5f9; border-radius: 8px;">
-
-                <h3 style="color: #2563eb;">Your Weather Advice</h3>
-                <p id="answer"></p>
-                <p id="sop"></p>
-                <p id="severity"></p>
-                <p id="weather"></p>
-
-            </div>
-        </div>
-
-        <script>
-            document.getElementById("myForm").onsubmit = async function(event) {
-                event.preventDefault();
-
-                let question = document.getElementById("question").value.trim();
-                let result = document.getElementById("result");
-                let button = document.querySelector("button");
-
-                result.style.display = "block";
-                document.getElementById("answer").innerText = "Checking weather...";
-                document.getElementById("sop").innerText = "";
-                document.getElementById("severity").innerText = "";
-                document.getElementById("weather").innerText = "";
-
-                button.disabled = true;
-
-                try {
-                    let response = await fetch("/advice", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({question: question})
-                    });
-
-                    let data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.detail || "Unable to get advice.");
-                    }
-
-                    let sop = data.sop || {};
-                    let weather = data.weather || {};
-
-                    document.getElementById("answer").innerText =
-                        "Answer: " + (data.response || "No advice available.");
-
-                    document.getElementById("sop").innerText =
-                        "SOP ID: " + (sop.id || "No matching SOP");
-
-                    document.getElementById("severity").innerText =
-                        "Severity: " + (sop.severity || "Not specified");
-
-                    document.getElementById("weather").innerText =
-                        "Weather: Temperature: " + (weather.temperature ?? "N/A") + "°C, " +
-                        "Precipitation: " + (weather.precipitation_probability ?? "N/A") + "%, " +
-                        "Wind speed: " + (weather.wind_speed ?? "N/A") + " km/h";
-
-                } catch (error) {
-                    document.getElementById("answer").innerText =
-                        "Error: " + error.message;
-                } finally {
-                    button.disabled = false;
-                }
-            };
-        </script>
-
-    </body>
-    </html>
-    """
 
 @app.get("/health")
 def health():
@@ -158,9 +132,7 @@ def health():
 def get_advice(request: AdvisoryRequest):
     """Generate a weather advisory for the user's question."""
     try:
-        result = run_advisor(request.question)
-        return result
-
+        return run_advisor(request.question, request.session_id)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
